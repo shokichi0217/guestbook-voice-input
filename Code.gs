@@ -12,6 +12,26 @@ function doGet(e) {
 }
 
 /**
+ * 外部のWebサイト（GitHub Pagesなど）からのPOSTリクエストを受け取ります。
+ */
+function doPost(e) {
+  try {
+    // text/plain で送られてきた JSON 文字列をパース
+    var data = JSON.parse(e.postData.contents);
+    var result = addRecord(data);
+    
+    // CORSを回避して結果を返す
+    return ContentService.createTextOutput(JSON.stringify(result))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "error",
+      message: "エラーが発生しました: " + error.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/**
  * フロントエンドから送信されたデータをスプレッドシートの末尾に追記します。
  * @param {Object} data 入力フォームのデータオブジェクト
  * @return {Object} 処理結果ステータス

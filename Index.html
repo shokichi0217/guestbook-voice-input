@@ -1239,19 +1239,24 @@
         other: document.getElementById('val-other').value.trim()
       };
 
-      // Check if we are running in Google Apps Script Environment
-      if (typeof google !== 'undefined' && google.script && google.script.run) {
-        google.script.run
-          .withSuccessHandler(onSuccess)
-          .withFailureHandler(onFailure)
-          .addRecord(payload);
-      } else {
-        // Fallback for local testing/development
-        console.log("GAS environment not detected. Payload would be:", payload);
-        setTimeout(() => {
-          onSuccess({ status: "success", message: "（ローカルテスト）登録に成功しました。" });
-        }, 1500);
-      }
+      const GAS_URL = 'https://script.google.com/macros/s/AKfycbw4a4ZEVwVfkfFuDqC7BRFSMzwBQgN13gTrRwwf6KbIk3HcGNfQkA_O5LfgDgDmWzEl/exec';
+
+      // CORSのプリフライトチェック（OPTIONSリクエスト）を回避するために text/plain で送信します
+      fetch(GAS_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8"
+        },
+        body: JSON.stringify(payload)
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('ネットワークエラーが発生しました。');
+        }
+        return response.json();
+      })
+      .then(onSuccess)
+      .catch(onFailure);
     }
 
     // Success response handler
