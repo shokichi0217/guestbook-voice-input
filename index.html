@@ -566,15 +566,28 @@
     <!-- ==================== STEP 3: 御住所 ==================== -->
     <div id="step-address" class="step-view">
       <div>
-        <div class="step-label">御住所を話してください</div>
-        <div class="step-description">（例：「おおいたけんゆふし...」）</div>
+        <div class="step-label">御住所を入力または話してください</div>
+        <div class="step-description">①まず、郵便番号を話すか入力してください。</div>
+        
+        <!-- 郵便番号入力 -->
+        <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center; justify-content: center;">
+          <span style="font-size: 26px; font-weight: bold; color: var(--primary-color);">〒</span>
+          <input type="text" id="val-zipcode" class="large-textarea" style="min-height: 60px; font-size: 24px; padding: 10px; flex: 1; text-align: center; max-width: 250px;" placeholder="例：879-5102" maxlength="8">
+          <button class="mic-btn" style="width: 60px; height: 60px; margin-bottom: 0;" onclick="toggleRecognition('val-zipcode', 'zipcode')">
+            <svg viewBox="0 0 24 24" style="width: 26px; height: 26px;"><path d="M12,14A3,3 0 0,0 15,11V5A3,3 0 0,0 12,2A3,3 0 0,0 9,5V11A3,3 0 0,0 12,14M17.3,11C17.3,14 14.76,16.1 12,16.1C9.24,16.1 6.7,14 6.7,11H5C5,14.41 7.72,17.23 11,17.72V21H13V17.72C16.28,17.23 19,14.41 19,11H17.3Z"/></svg>
+          </button>
+        </div>
+
+        <div class="step-description">②住所が自動入力されたら、続けて番地を話すか入力してください。</div>
+        
+        <!-- 住所表示エリア -->
         <div class="input-container">
-          <textarea id="val-address" class="large-textarea" placeholder="ここに音声入力されます" rows="2"></textarea>
+          <textarea id="val-address" class="large-textarea" placeholder="ここに住所が自動入力されます" rows="2"></textarea>
         </div>
       </div>
       <div>
         <div class="mic-button-container">
-          <button class="mic-btn" onclick="toggleRecognition('val-address')">
+          <button class="mic-btn" onclick="toggleRecognition('val-address', 'address-suffix')">
             <svg viewBox="0 0 24 24"><path d="M12,14A3,3 0 0,0 15,11V5A3,3 0 0,0 12,2A3,3 0 0,0 9,5V11A3,3 0 0,0 12,14M17.3,11C17.3,14 14.76,16.1 12,16.1C9.24,16.1 6.7,14 6.7,11H5C5,14.41 7.72,17.23 11,17.72V21H13V17.72C16.28,17.23 19,14.41 19,11H17.3Z"/></svg>
           </button>
         </div>
@@ -915,11 +928,31 @@
           // Apply smart auto-formatting based on step input type
           if (activeInputType === 'tel') {
             text = formatTelNumber(text);
+            activeTextarea.value = text;
           } else if (activeInputType === 'number') {
             text = formatNumberText(text);
+            activeTextarea.value = text;
+          } else if (activeInputType === 'zipcode') {
+            text = formatZipcode(text);
+            activeTextarea.value = text;
+            const cleanZip = text.replace(/[^\d]/g, '');
+            if (cleanZip.length === 7) {
+              fetchAddressFromZip(text);
+            }
+          } else if (activeInputType === 'address-suffix') {
+            text = cleanAddressSuffix(text);
+            const baseAddr = activeTextarea.dataset.baseAddress || '';
+            const currentVal = activeTextarea.value;
+            
+            // Prefilled address matches baseAddr
+            if (currentVal.startsWith(baseAddr)) {
+              activeTextarea.value = baseAddr + text;
+            } else {
+              activeTextarea.value = currentVal.trim() + ' ' + text;
+            }
+          } else {
+            activeTextarea.value = text;
           }
-          
-          activeTextarea.value = text;
         }
       };
 
@@ -1053,6 +1086,68 @@
       }
       
       return str;
+    }
+
+    // Format zipcode (convert zenkaku numbers to hankaku and format as 7 digits)
+    function formatZipcode(str) {
+      let digits = str.replace(/[^\d０-９]/g, '');
+      // Convert zenkaku numbers to hankaku
+      digits = digits.replace(/[０-９]/g, function(s) {
+        return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
+      });
+      if (digits.length >= 7) {
+        return digits.slice(0, 3) + '-' + digits.slice(3, 7);
+      }
+      return digits;
+    }
+
+    // Clean spoken address suffixes (convert zenkaku numbers and clean "の")
+    function cleanAddressSuffix(str) {
+      if (!str) return '';
+      // Convert zenkaku numbers to hankaku
+      let text = str.replace(/[０-９]/g, function(s) {
+        return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
+      });
+      // Convert spoken "の" between digits to hyphens
+      text = text.replace(/(\d+)の(\d+)/g, '$1-$2');
+      return text;
+    }
+
+    // Auto address search from Zipcode API
+    function fetchAddressFromZip(zip) {
+      const cleanedZip = zip.replace(/[^\d]/g, '');
+      if (cleanedZip.length !== 7) return;
+
+      const addressInput = document.getElementById('val-address');
+      const originalPlaceholder = addressInput.placeholder;
+      addressInput.placeholder = '住所を自動検索中...';
+
+      fetch(`https://zipcloud.ibsnet.co.jp/api/search?zipcode=${cleanedZip}`)
+        .then(response => response.json())
+        .then(data => {
+          if (data.status === 200 && data.results) {
+            const result = data.results[0];
+            const pref = result.address1; // 大分県
+            const city = result.address2; // 由布市
+            const town = result.address3; // 湯布院町川上
+            
+            const zipFormatted = cleanedZip.slice(0, 3) + '-' + cleanedZip.slice(3);
+            const fullAddress = `${zipFormatted} ${pref}${city}${town} `;
+            
+            addressInput.value = fullAddress;
+            addressInput.dataset.baseAddress = fullAddress; // Store base address for suffix appending
+            addressInput.placeholder = originalPlaceholder;
+            playBeep('success');
+          } else {
+            addressInput.placeholder = '住所が見つかりませんでした';
+            setTimeout(() => { addressInput.placeholder = originalPlaceholder; }, 3000);
+          }
+        })
+        .catch(err => {
+          console.error("Zipcode search error:", err);
+          addressInput.placeholder = '通信エラーが発生しました';
+          setTimeout(() => { addressInput.placeholder = originalPlaceholder; }, 3000);
+        });
     }
 
     // Quick selection helpers
@@ -1302,9 +1397,12 @@
     }
 
     // Reset form inputs for next registration
+    // Reset form inputs for next registration
     function clearAllInputs() {
       document.getElementById('val-name').value = '';
+      document.getElementById('val-zipcode').value = '';
       document.getElementById('val-address').value = '';
+      delete document.getElementById('val-address').dataset.baseAddress;
       document.getElementById('val-tel').value = '';
       document.getElementById('val-koden').value = '';
       document.getElementById('val-offering').value = '';
@@ -1336,6 +1434,19 @@
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
         document.getElementById('compatibility-warning').classList.remove('hidden');
+      }
+
+      // Add input listener for zipcode typing
+      const zipcodeField = document.getElementById('val-zipcode');
+      if (zipcodeField) {
+        zipcodeField.addEventListener('input', function(e) {
+          let val = formatZipcode(e.target.value);
+          e.target.value = val;
+          const digits = val.replace(/[^\d]/g, '');
+          if (digits.length === 7) {
+            fetchAddressFromZip(val);
+          }
+        });
       }
     });
   </script>
