@@ -1,0 +1,1338 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>御芳名 音声入力システム</title>
+  <!-- Google Fonts: Noto Sans JP for clear Japanese readability -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-color: #f0f2f5;
+      --card-bg: rgba(255, 255, 255, 0.9);
+      --primary-color: #3b5998;
+      --primary-hover: #2d4373;
+      --accent-color: #ef4444; /* Microphone Active */
+      --accent-hover: #dc2626;
+      --success-color: #10b981; /* Submit Button */
+      --success-hover: #059669;
+      --text-color: #1f2937;
+      --text-muted: #4b5563;
+      --border-color: rgba(229, 231, 235, 0.8);
+      
+      --font-main: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-main);
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      overflow-x: hidden;
+    }
+
+    /* Webapp Container */
+    .app-container {
+      width: 100%;
+      max-width: 600px;
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border-color);
+      border-radius: 24px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      min-height: 550px;
+      position: relative;
+    }
+
+    /* Header styling */
+    .app-header {
+      text-align: center;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 12px;
+    }
+
+    .app-header h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--primary-color);
+      letter-spacing: 1px;
+    }
+
+    .app-header p {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Step Progress Indicator */
+    .progress-bar-container {
+      width: 100%;
+      height: 8px;
+      background-color: #e5e7eb;
+      border-radius: 4px;
+      margin-bottom: 24px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background-color: var(--primary-color);
+      width: 12.5%; /* 1/8 steps */
+      transition: width 0.3s ease;
+    }
+
+    .step-counter {
+      text-align: right;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-top: -16px;
+      margin-bottom: 16px;
+    }
+
+    /* Active Form Step Card */
+    .step-view {
+      display: none;
+      flex-direction: column;
+      flex-grow: 1;
+      justify-content: space-between;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .step-view.active {
+      display: flex;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Instruction Label */
+    .step-label {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--primary-color);
+      text-align: center;
+      margin-bottom: 16px;
+      line-height: 1.4;
+    }
+
+    .step-description {
+      font-size: 16px;
+      color: var(--text-muted);
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    /* Input Field Display */
+    .input-container {
+      position: relative;
+      width: 100%;
+      margin-bottom: 20px;
+    }
+
+    .large-textarea {
+      width: 100%;
+      min-height: 90px;
+      font-family: var(--font-main);
+      font-size: 24px;
+      font-weight: bold;
+      padding: 16px;
+      border: 2px solid #cbd5e1;
+      border-radius: 16px;
+      resize: none;
+      text-align: center;
+      background-color: #ffffff;
+      color: var(--text-color);
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .large-textarea:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 4px rgba(59, 89, 152, 0.2);
+    }
+
+    .interim-text {
+      color: #9ca3af;
+      font-weight: normal;
+      font-style: italic;
+    }
+
+    /* Voice Input / Mic Button */
+    .mic-button-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .mic-btn {
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      background-color: var(--primary-color);
+      border: none;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      box-shadow: 0 6px 16px rgba(59, 89, 152, 0.3);
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      position: relative;
+    }
+
+    .mic-btn:active {
+      transform: scale(0.95);
+    }
+
+    .mic-btn svg {
+      fill: #ffffff;
+      width: 40px;
+      height: 40px;
+      transition: fill 0.3s;
+    }
+
+    /* Recording State for Mic */
+    .mic-btn.recording {
+      background-color: var(--accent-color);
+      animation: pulse 1.5s infinite;
+      box-shadow: 0 0 0 10px rgba(239, 68, 68, 0.2);
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.08); }
+      100% { transform: scale(1); }
+    }
+
+    /* Quick Buttons Layout (Grid) */
+    .quick-btn-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .quick-btn-grid.triple {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    .quick-btn {
+      padding: 16px 10px;
+      font-size: 20px;
+      font-weight: 700;
+      border: 2px solid #cbd5e1;
+      border-radius: 16px;
+      background-color: #ffffff;
+      color: var(--text-color);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: center;
+      user-select: none;
+    }
+
+    .quick-btn:hover {
+      border-color: var(--primary-color);
+      background-color: rgba(59, 89, 152, 0.05);
+    }
+
+    .quick-btn.selected {
+      background-color: var(--primary-color);
+      border-color: var(--primary-color);
+      color: #ffffff;
+      box-shadow: 0 4px 10px rgba(59, 89, 152, 0.2);
+    }
+
+    /* Form Checkboxes rendered as big toggle blocks */
+    .checkbox-block {
+      display: flex;
+      align-items: center;
+      padding: 18px;
+      border: 2px solid #cbd5e1;
+      border-radius: 16px;
+      background-color: #ffffff;
+      cursor: pointer;
+      margin-bottom: 12px;
+      transition: all 0.2s ease;
+      user-select: none;
+    }
+
+    .checkbox-block:hover {
+      border-color: var(--primary-color);
+    }
+
+    .checkbox-block.checked {
+      border-color: var(--primary-color);
+      background-color: rgba(59, 89, 152, 0.05);
+    }
+
+    .checkbox-indicator {
+      width: 28px;
+      height: 28px;
+      border: 2px solid #cbd5e1;
+      border-radius: 6px;
+      margin-right: 16px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: #ffffff;
+      transition: all 0.2s;
+    }
+
+    .checkbox-block.checked .checkbox-indicator {
+      background-color: var(--primary-color);
+      border-color: var(--primary-color);
+    }
+
+    .checkbox-indicator svg {
+      fill: #ffffff;
+      width: 16px;
+      height: 16px;
+      display: none;
+    }
+
+    .checkbox-block.checked .checkbox-indicator svg {
+      display: block;
+    }
+
+    .checkbox-label {
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    /* Custom Input for Option Other */
+    .other-input-container {
+      display: none;
+      margin-top: 10px;
+    }
+
+    .other-input-container.active {
+      display: block;
+      animation: slideDown 0.2s ease;
+    }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Navigation Buttons (Footer) */
+    .nav-buttons {
+      display: flex;
+      gap: 16px;
+      margin-top: 12px;
+    }
+
+    .nav-btn {
+      flex: 1;
+      padding: 18px 24px;
+      font-size: 20px;
+      font-weight: 700;
+      border: none;
+      border-radius: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      user-select: none;
+    }
+
+    .btn-back {
+      background-color: #e5e7eb;
+      color: var(--text-color);
+    }
+
+    .btn-back:hover {
+      background-color: #d1d5db;
+    }
+
+    .btn-next {
+      background-color: var(--primary-color);
+      color: #ffffff;
+      box-shadow: 0 4px 10px rgba(59, 89, 152, 0.2);
+    }
+
+    .btn-next:hover {
+      background-color: var(--primary-hover);
+    }
+
+    .btn-submit {
+      background-color: var(--success-color);
+      color: #ffffff;
+      box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2);
+    }
+
+    .btn-submit:hover {
+      background-color: var(--success-hover);
+    }
+
+    .btn-disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    /* Summary / Review Step */
+    .summary-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 320px;
+      overflow-y: auto;
+      padding-right: 4px;
+      margin-bottom: 20px;
+    }
+
+    .summary-item {
+      padding: 12px 16px;
+      background-color: #f9fafb;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .summary-item:hover {
+      background-color: rgba(59, 89, 152, 0.05);
+      border-color: var(--primary-color);
+    }
+
+    .summary-key {
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--primary-color);
+      margin-bottom: 4px;
+    }
+
+    .summary-val {
+      font-size: 20px;
+      font-weight: bold;
+      word-break: break-all;
+    }
+
+    .summary-val:empty::after {
+      content: '未入力 (スキップ)';
+      color: #9ca3af;
+      font-weight: normal;
+      font-style: italic;
+    }
+
+    /* Status Notifications overlay */
+    .toast-overlay {
+      position: absolute;
+      top: 24px;
+      left: 24px;
+      right: 24px;
+      padding: 16px;
+      border-radius: 12px;
+      color: #ffffff;
+      font-size: 16px;
+      font-weight: bold;
+      text-align: center;
+      display: none;
+      z-index: 100;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      animation: slideDown 0.3s ease;
+    }
+
+    .toast-success {
+      background-color: var(--success-color);
+      display: block;
+    }
+
+    .toast-error {
+      background-color: var(--accent-color);
+      display: block;
+    }
+
+    /* Helper styles */
+    .hidden {
+      display: none !important;
+    }
+
+    /* Compatibility Warning */
+    .browser-warning {
+      background-color: #fef3c7;
+      border: 1px solid #f59e0b;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+      color: #92400e;
+      font-weight: 500;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    <!-- Toast Message Container -->
+    <div id="toast" class="toast-overlay"></div>
+
+    <div class="app-header">
+      <h1>御芳名 音声入力</h1>
+      <p id="app-subtitle">芳名帳の文字起こしを音声でアシストします</p>
+    </div>
+
+    <!-- Browser Compatibility Warning -->
+    <div id="compatibility-warning" class="browser-warning hidden">
+      お使いのブラウザは音声認識に対応していません。Google Chrome（PC/Android）または Safari（iPhone/iPad）をご利用ください。
+    </div>
+
+    <!-- Progress Tracker -->
+    <div id="progress-container">
+      <div class="progress-bar-container">
+        <div id="progress-bar" class="progress-bar-fill"></div>
+      </div>
+      <div id="step-counter" class="step-counter">ステップ 1 / 8</div>
+    </div>
+
+    <!-- ==================== STEP 1: 御氏名 ==================== -->
+    <div id="step-name" class="step-view active">
+      <div>
+        <div class="step-label">御氏名（お名前）を<br>話してください</div>
+        <div class="step-description">（例：「さとうたかお」「株式会社大谷商会」など）</div>
+        <div class="input-container">
+          <textarea id="val-name" class="large-textarea" placeholder="ここに音声入力されます" rows="2"></textarea>
+        </div>
+      </div>
+      <div>
+        <div class="mic-button-container">
+          <button class="mic-btn" onclick="toggleRecognition('val-name')">
+            <svg viewBox="0 0 24 24"><path d="M12,14A3,3 0 0,0 15,11V5A3,3 0 0,0 12,2A3,3 0 0,0 9,5V11A3,3 0 0,0 12,14M17.3,11C17.3,14 14.76,16.1 12,16.1C9.24,16.1 6.7,14 6.7,11H5C5,14.41 7.72,17.23 11,17.72V21H13V17.72C16.28,17.23 19,14.41 19,11H17.3Z"/></svg>
+          </button>
+        </div>
+        <div class="nav-buttons">
+          <button class="nav-btn btn-back btn-disabled">戻る</button>
+          <button class="nav-btn btn-next" onclick="nextStep()">次へ (スキップ)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== STEP 2: 列 2 (通夜・告別式) ==================== -->
+    <div id="step-col2" class="step-view">
+      <div>
+        <div class="step-label">参列区分を選択してください</div>
+        <div class="step-description">（複数選択可能です）</div>
+        
+        <div style="margin-bottom: 20px;">
+          <div class="checkbox-block" onclick="toggleCheckbox('cb-tsuya')">
+            <div id="cb-tsuya-indicator" class="checkbox-indicator">
+              <svg viewBox="0 0 24 24"><path d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.58L21,7Z"/></svg>
+            </div>
+            <div class="checkbox-label">通夜</div>
+          </div>
+          
+          <div class="checkbox-block" onclick="toggleCheckbox('cb-kokubetsu')">
+            <div id="cb-kokubetsu-indicator" class="checkbox-indicator">
+              <svg viewBox="0 0 24 24"><path d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.58L21,7Z"/></svg>
+            </div>
+            <div class="checkbox-label">告別式</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="nav-buttons">
+          <button class="nav-btn btn-back" onclick="prevStep()">戻る</button>
+          <button class="nav-btn btn-next" onclick="nextStep()">次へ</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== STEP 3: 御住所 ==================== -->
+    <div id="step-address" class="step-view">
+      <div>
+        <div class="step-label">御住所を話してください</div>
+        <div class="step-description">（例：「おおいたけんゆふし...」）</div>
+        <div class="input-container">
+          <textarea id="val-address" class="large-textarea" placeholder="ここに音声入力されます" rows="2"></textarea>
+        </div>
+      </div>
+      <div>
+        <div class="mic-button-container">
+          <button class="mic-btn" onclick="toggleRecognition('val-address')">
+            <svg viewBox="0 0 24 24"><path d="M12,14A3,3 0 0,0 15,11V5A3,3 0 0,0 12,2A3,3 0 0,0 9,5V11A3,3 0 0,0 12,14M17.3,11C17.3,14 14.76,16.1 12,16.1C9.24,16.1 6.7,14 6.7,11H5C5,14.41 7.72,17.23 11,17.72V21H13V17.72C16.28,17.23 19,14.41 19,11H17.3Z"/></svg>
+          </button>
+        </div>
+        <div class="nav-buttons">
+          <button class="nav-btn btn-back" onclick="prevStep()">戻る</button>
+          <button class="nav-btn btn-next" onclick="nextStep()">次へ (スキップ)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== STEP 4: 電話番号 ==================== -->
+    <div id="step-tel" class="step-view">
+      <div>
+        <div class="step-label">電話番号を話してください</div>
+        <div class="step-description">（例：「ぜろきゅーぜろ、いちにさん...」）</div>
+        <div class="input-container">
+          <textarea id="val-tel" class="large-textarea" placeholder="ここに音声入力されます" rows="1"></textarea>
+        </div>
+      </div>
+      <div>
+        <div class="mic-button-container">
+          <button class="mic-btn" onclick="toggleRecognition('val-tel', 'tel')">
+            <svg viewBox="0 0 24 24"><path d="M12,14A3,3 0 0,0 15,11V5A3,3 0 0,0 12,2A3,3 0 0,0 9,5V11A3,3 0 0,0 12,14M17.3,11C17.3,14 14.76,16.1 12,16.1C9.24,16.1 6.7,14 6.7,11H5C5,14.41 7.72,17.23 11,17.72V21H13V17.72C16.28,17.23 19,14.41 19,11H17.3Z"/></svg>
+          </button>
+        </div>
+        <div class="nav-buttons">
+          <button class="nav-btn btn-back" onclick="prevStep()">戻る</button>
+          <button class="nav-btn btn-next" onclick="nextStep()">次へ (スキップ)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== STEP 5: 列 5 (分類: 一般/会社/親戚) ==================== -->
+    <div id="step-col5" class="step-view">
+      <div>
+        <div class="step-label">分類を選択してください</div>
+        <div class="step-description">（複数選択可能です）</div>
+        
+        <div>
+          <div class="checkbox-block" onclick="toggleCheckbox('cb-ippan')">
+            <div id="cb-ippan-indicator" class="checkbox-indicator">
+              <svg viewBox="0 0 24 24"><path d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.58L21,7Z"/></svg>
+            </div>
+            <div class="checkbox-label">一般</div>
+          </div>
+          
+          <div class="checkbox-block" onclick="toggleCheckbox('cb-kaisha')">
+            <div id="cb-kaisha-indicator" class="checkbox-indicator">
+              <svg viewBox="0 0 24 24"><path d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.58L21,7Z"/></svg>
+            </div>
+            <div class="checkbox-label">会社</div>
+          </div>
+
+          <div class="checkbox-block" onclick="toggleCheckbox('cb-shinseki')">
+            <div id="cb-shinseki-indicator" class="checkbox-indicator">
+              <svg viewBox="0 0 24 24"><path d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.58L21,7Z"/></svg>
+            </div>
+            <div class="checkbox-label">親戚</div>
+          </div>
+
+          <div class="checkbox-block" onclick="toggleCheckbox('cb-other5')">
+            <div id="cb-other5-indicator" class="checkbox-indicator">
+              <svg viewBox="0 0 24 24"><path d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.58L21,7Z"/></svg>
+            </div>
+            <div class="checkbox-label">その他</div>
+          </div>
+
+          <div id="other5-text-container" class="other-input-container">
+            <textarea id="val-col5-other" class="large-textarea" placeholder="その他の内容を入力（音声対応）" rows="1" style="font-size:18px; min-height:60px;"></textarea>
+            <div class="mic-button-container" style="margin-top: 8px; margin-bottom: 0;">
+              <button class="mic-btn" style="width:50px; height:50px;" onclick="toggleRecognition('val-col5-other')">
+                <svg viewBox="0 0 24 24" style="width:22px; height:22px;"><path d="M12,14A3,3 0 0,0 15,11V5A3,3 0 0,0 12,2A3,3 0 0,0 9,5V11A3,3 0 0,0 12,14M17.3,11C17.3,14 14.76,16.1 12,16.1C9.24,16.1 6.7,14 6.7,11H5C5,14.41 7.72,17.23 11,17.72V21H13V17.72C16.28,17.23 19,14.41 19,11H17.3Z"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="nav-buttons">
+          <button class="nav-btn btn-back" onclick="prevStep()">戻る</button>
+          <button class="nav-btn btn-next" onclick="nextStep()">次へ</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== STEP 6: 御香典（玉串・献花料） ==================== -->
+    <div id="step-koden" class="step-view">
+      <div>
+        <div class="step-label">御香典の金額を選択、<br>または話してください</div>
+        
+        <!-- Quick amount buttons -->
+        <div class="quick-btn-grid">
+          <button class="quick-btn" onclick="selectKoden('3,000')">3,000 円</button>
+          <button class="quick-btn" onclick="selectKoden('5,000')">5,000 円</button>
+          <button class="quick-btn" onclick="selectKoden('10,000')">10,000 円</button>
+          <button class="quick-btn" onclick="selectKoden('30,000')">30,000 円</button>
+          <button class="quick-btn" onclick="selectKoden('お参りのみ')">お参りのみ</button>
+          <button class="quick-btn" onclick="selectKoden('なし')">なし</button>
+        </div>
+
+        <div class="input-container">
+          <textarea id="val-koden" class="large-textarea" placeholder="金額または項目が入ります" rows="1"></textarea>
+        </div>
+      </div>
+      <div>
+        <div class="mic-button-container">
+          <button class="mic-btn" onclick="toggleRecognition('val-koden', 'number')">
+            <svg viewBox="0 0 24 24"><path d="M12,14A3,3 0 0,0 15,11V5A3,3 0 0,0 12,2A3,3 0 0,0 9,5V11A3,3 0 0,0 12,14M17.3,11C17.3,14 14.76,16.1 12,16.1C9.24,16.1 6.7,14 6.7,11H5C5,14.41 7.72,17.23 11,17.72V21H13V17.72C16.28,17.23 19,14.41 19,11H17.3Z"/></svg>
+          </button>
+        </div>
+        <div class="nav-buttons">
+          <button class="nav-btn btn-back" onclick="prevStep()">戻る</button>
+          <button class="nav-btn btn-next" onclick="nextStep()">次へ</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== STEP 7: 供花・供物 ==================== -->
+    <div id="step-offering" class="step-view">
+      <div>
+        <div class="step-label">供花・供物をお選びいただくか、<br>話してください</div>
+        
+        <div class="quick-btn-grid triple">
+          <button class="quick-btn" onclick="selectOffering('なし')">なし</button>
+          <button class="quick-btn" onclick="selectOffering('生花')">生花</button>
+          <button class="quick-btn" onclick="selectOffering('盛籠')">盛籠</button>
+        </div>
+
+        <div class="input-container">
+          <textarea id="val-offering" class="large-textarea" placeholder="供物内容が入ります" rows="1"></textarea>
+        </div>
+      </div>
+      <div>
+        <div class="mic-button-container">
+          <button class="mic-btn" onclick="toggleRecognition('val-offering')">
+            <svg viewBox="0 0 24 24"><path d="M12,14A3,3 0 0,0 15,11V5A3,3 0 0,0 12,2A3,3 0 0,0 9,5V11A3,3 0 0,0 12,14M17.3,11C17.3,14 14.76,16.1 12,16.1C9.24,16.1 6.7,14 6.7,11H5C5,14.41 7.72,17.23 11,17.72V21H13V17.72C16.28,17.23 19,14.41 19,11H17.3Z"/></svg>
+          </button>
+        </div>
+        <div class="nav-buttons">
+          <button class="nav-btn btn-back" onclick="prevStep()">戻る</button>
+          <button class="nav-btn btn-next" onclick="nextStep()">次へ</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== STEP 8: その他 ==================== -->
+    <div id="step-other" class="step-view">
+      <div>
+        <div class="step-label">その他（特記事項など）があれば<br>話してください</div>
+        <div class="step-description">（例：「お参りのみ」「親族の代理」など）</div>
+        
+        <div class="input-container">
+          <textarea id="val-other" class="large-textarea" placeholder="メモ・特記事項など" rows="2"></textarea>
+        </div>
+      </div>
+      <div>
+        <div class="mic-button-container">
+          <button class="mic-btn" onclick="toggleRecognition('val-other')">
+            <svg viewBox="0 0 24 24"><path d="M12,14A3,3 0 0,0 15,11V5A3,3 0 0,0 12,2A3,3 0 0,0 9,5V11A3,3 0 0,0 12,14M17.3,11C17.3,14 14.76,16.1 12,16.1C9.24,16.1 6.7,14 6.7,11H5C5,14.41 7.72,17.23 11,17.72V21H13V17.72C16.28,17.23 19,14.41 19,11H17.3Z"/></svg>
+          </button>
+        </div>
+        <div class="nav-buttons">
+          <button class="nav-btn btn-back" onclick="prevStep()">戻る</button>
+          <button class="nav-btn btn-next" onclick="showSummary()">確認画面へ</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== STEP 9: 確認・登録画面 ==================== -->
+    <div id="step-summary" class="step-view">
+      <div>
+        <div class="step-label" style="margin-bottom: 8px;">入力内容の確認</div>
+        <div class="step-description" style="margin-bottom: 12px;">修正したい項目をタップすると、その項目に戻ります。</div>
+        
+        <div class="summary-list">
+          <div class="summary-item" onclick="jumpToStep(1)">
+            <span class="summary-key">御氏名</span>
+            <span id="sum-name" class="summary-val"></span>
+          </div>
+          <div class="summary-item" onclick="jumpToStep(2)">
+            <span class="summary-key">参列区分 (列 2)</span>
+            <span id="sum-col2" class="summary-val"></span>
+          </div>
+          <div class="summary-item" onclick="jumpToStep(3)">
+            <span class="summary-key">御住所</span>
+            <span id="sum-address" class="summary-val"></span>
+          </div>
+          <div class="summary-item" onclick="jumpToStep(4)">
+            <span class="summary-key">電話番号</span>
+            <span id="sum-tel" class="summary-val"></span>
+          </div>
+          <div class="summary-item" onclick="jumpToStep(5)">
+            <span class="summary-key">分類 (列 5)</span>
+            <span id="sum-col5" class="summary-val"></span>
+          </div>
+          <div class="summary-item" onclick="jumpToStep(6)">
+            <span class="summary-key">御香典（玉串・献花料）</span>
+            <span id="sum-koden" class="summary-val"></span>
+          </div>
+          <div class="summary-item" onclick="jumpToStep(7)">
+            <span class="summary-key">供花・供物</span>
+            <span id="sum-offering" class="summary-val"></span>
+          </div>
+          <div class="summary-item" onclick="jumpToStep(8)">
+            <span class="summary-key">その他</span>
+            <span id="sum-other" class="summary-val"></span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="nav-buttons">
+          <button class="nav-btn btn-back" onclick="jumpToStep(8)">戻る</button>
+          <button id="submit-btn" class="nav-btn btn-submit" onclick="submitToSheet()">この内容で登録する</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // State Variables
+    let currentStep = 1;
+    const totalSteps = 8;
+    let recognition = null;
+    let isRecording = false;
+    let activeTextAreaId = null;
+    let activeInputType = 'text'; // text, number, tel
+
+    // Audio Context for beep sound cues (No external files needed)
+    let audioCtx = null;
+    function playBeep(type) {
+      try {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        if (type === 'start') {
+          // Double high-pitch beep for starting mic
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5
+          gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.08);
+          
+          setTimeout(() => {
+            const osc2 = audioCtx.createOscillator();
+            const gain2 = audioCtx.createGain();
+            osc2.connect(gain2);
+            gain2.connect(audioCtx.destination);
+            osc2.frequency.setValueAtTime(1046.5, audioCtx.currentTime); // C6
+            gain2.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            osc2.start();
+            osc2.stop(audioCtx.currentTime + 0.08);
+          }, 100);
+        } else if (type === 'stop') {
+          // Standard low-pitch beep for stopping mic
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(440, audioCtx.currentTime); // A4
+          gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.15);
+        } else if (type === 'success') {
+          // Beautiful notification chime
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+          gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.1);
+          
+          setTimeout(() => {
+            const osc2 = audioCtx.createOscillator();
+            const gain2 = audioCtx.createGain();
+            osc2.connect(gain2);
+            gain2.connect(audioCtx.destination);
+            osc2.type = 'triangle';
+            osc2.frequency.setValueAtTime(659.25, audioCtx.currentTime); // E5
+            gain2.gain.setValueAtTime(0.15, audioCtx.currentTime);
+            osc2.start();
+            osc2.stop(audioCtx.currentTime + 0.1);
+          }, 100);
+
+          setTimeout(() => {
+            const osc3 = audioCtx.createOscillator();
+            const gain3 = audioCtx.createGain();
+            osc3.connect(gain3);
+            gain3.connect(audioCtx.destination);
+            osc3.type = 'triangle';
+            osc3.frequency.setValueAtTime(784.00, audioCtx.currentTime); // G5
+            gain3.gain.setValueAtTime(0.15, audioCtx.currentTime);
+            osc3.start();
+            osc3.stop(audioCtx.currentTime + 0.2);
+          }, 200);
+        }
+      } catch (e) {
+        console.error("Audio beep error:", e);
+      }
+    }
+
+    // Initialize Web Speech API
+    function initSpeechRecognition() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        document.getElementById('compatibility-warning').classList.remove('hidden');
+        return false;
+      }
+      
+      recognition = new SpeechRecognition();
+      recognition.lang = 'ja-JP';
+      recognition.continuous = false;
+      recognition.interimResults = true;
+
+      recognition.onstart = function() {
+        isRecording = true;
+        updateMicUI();
+        playBeep('start');
+      };
+
+      recognition.onresult = function(event) {
+        let interimTranscript = '';
+        let finalTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+
+        const activeTextarea = document.getElementById(activeTextAreaId);
+        if (activeTextarea) {
+          let text = finalTranscript || interimTranscript;
+          
+          // Apply smart auto-formatting based on step input type
+          if (activeInputType === 'tel') {
+            text = formatTelNumber(text);
+          } else if (activeInputType === 'number') {
+            text = formatNumberText(text);
+          }
+          
+          activeTextarea.value = text;
+        }
+      };
+
+      recognition.onerror = function(event) {
+        console.error('Speech recognition error:', event.error);
+        stopRecognition();
+      };
+
+      recognition.onend = function() {
+        isRecording = false;
+        updateMicUI();
+        playBeep('stop');
+      };
+      
+      return true;
+    }
+
+    // Toggle speech recognition
+    function toggleRecognition(textareaId, inputType = 'text') {
+      // Initialize Audio Context on user interaction
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+
+      if (!recognition) {
+        const ok = initSpeechRecognition();
+        if (!ok) return;
+      }
+
+      if (isRecording) {
+        // If recording active, clicking button stops it
+        stopRecognition();
+      } else {
+        // Start recording
+        activeTextAreaId = textareaId;
+        activeInputType = inputType;
+        try {
+          recognition.start();
+        } catch(e) {
+          console.error("Recognition start error:", e);
+        }
+      }
+    }
+
+    function stopRecognition() {
+      if (recognition && isRecording) {
+        recognition.stop();
+      }
+    }
+
+    // Update Mic Button Colors & Animation based on state
+    function updateMicUI() {
+      const activeStepEl = document.querySelector('.step-view.active');
+      if (!activeStepEl) return;
+      const micBtn = activeStepEl.querySelector('.mic-btn');
+      if (!micBtn) return;
+
+      if (isRecording) {
+        micBtn.classList.add('recording');
+      } else {
+        micBtn.classList.remove('recording');
+      }
+    }
+
+    // Format phone numbers (Japanese spoken number converter)
+    function formatTelNumber(str) {
+      // Extract only digits
+      let digits = str.replace(/[^\d０-９]/g, '');
+      
+      // Convert zenkaku numbers to hankaku
+      digits = digits.replace(/[０-９]/g, function(s) {
+        return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
+      });
+      
+      // Basic Hyphen placement for Japan phone formats
+      // 09012345678 -> 090-1234-5678, 0312345678 -> 03-1234-5678
+      if (digits.length === 11 && (digits.startsWith('090') || digits.startsWith('080') || digits.startsWith('070') || digits.startsWith('050'))) {
+        return digits.slice(0, 3) + '-' + digits.slice(3, 7) + '-' + digits.slice(7);
+      } else if (digits.length === 10) {
+        if (digits.startsWith('03') || digits.startsWith('06')) {
+          return digits.slice(0, 2) + '-' + digits.slice(2, 6) + '-' + digits.slice(6);
+        } else {
+          return digits.slice(0, 3) + '-' + digits.slice(3, 6) + '-' + digits.slice(6);
+        }
+      }
+      return digits || str;
+    }
+
+    // Convert spoken numbers like "いちまんえん" or "五千" into raw digits
+    function formatNumberText(str) {
+      if (!str) return '';
+      
+      // Clean string
+      let cleaned = str.trim().replace(/円/g, '').replace(/,/g, '');
+      
+      // Dictionary for spoken Japanese numbers
+      const units = {
+        'せん': 1000, 'ぜん': 1000, '千': 1000,
+        'まん': 10000, '万': 10000,
+        'ひゃく': 100, '百': 100
+      };
+      
+      const nums = {
+        'いち': 1, '一': 1, 'いっ': 1,
+        'に': 2, '二': 2,
+        'さん': 3, '三': 3,
+        'よん': 4, 'よ': 4, 'し': 4, '四': 4,
+        'ご': 5, '五': 5,
+        'ろく': 6, '六': 6, 'ろっ': 6,
+        'なな': 7, 'しち': 7, '七': 7,
+        'はち': 8, '八': 8, 'はっ': 8,
+        'きゅう': 9, 'く': 9, '九': 9,
+        'じゅう': 10, 'じゅっ': 10, '十': 10
+      };
+
+      // Handle simple exact values
+      if (cleaned === 'さんぜん' || cleaned === '三千') return '3000';
+      if (cleaned === 'ごせん' || cleaned === '五千') return '5000';
+      if (cleaned === 'いちまん' || cleaned === '一万') return '10000';
+      if (cleaned === 'にまん' || cleaned === '二万') return '20000';
+      if (cleaned === 'さんまん' || cleaned === '三万') return '30000';
+      if (cleaned === 'ごまん' || cleaned === '五万') return '50000';
+
+      // Parse standard numeric speech
+      let digitOnly = cleaned.replace(/[^\d０-９]/g, '');
+      if (digitOnly.length > 0) {
+        // Convert zenkaku numbers to hankaku
+        return digitOnly.replace(/[０-９]/g, function(s) {
+          return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
+        });
+      }
+      
+      return str;
+    }
+
+    // Quick selection helpers
+    function selectKoden(value) {
+      const ta = document.getElementById('val-koden');
+      ta.value = value;
+      // Mark selected button styling
+      const buttons = document.querySelectorAll('#step-koden .quick-btn');
+      buttons.forEach(btn => {
+        if (btn.innerText.replace(' 円', '') === value || btn.innerText === value) {
+          btn.classList.add('selected');
+        } else {
+          btn.classList.remove('selected');
+        }
+      });
+      // Move forward automatically on selection (smooth wizard flow)
+      setTimeout(nextStep, 200);
+    }
+
+    function selectOffering(value) {
+      const ta = document.getElementById('val-offering');
+      ta.value = value;
+      // Mark selected
+      const buttons = document.querySelectorAll('#step-offering .quick-btn');
+      buttons.forEach(btn => {
+        if (btn.innerText === value) {
+          btn.classList.add('selected');
+        } else {
+          btn.classList.remove('selected');
+        }
+      });
+      setTimeout(nextStep, 200);
+    }
+
+    // Checkbox block handler (supports multi-select)
+    function toggleCheckbox(elementId) {
+      const indicator = document.getElementById(elementId + '-indicator');
+      const block = indicator.parentElement;
+      block.classList.toggle('checked');
+      
+      // Special logic for classification "Other" checkbox
+      if (elementId === 'cb-other5') {
+        const otherInput = document.getElementById('other5-text-container');
+        if (block.classList.contains('checked')) {
+          otherInput.classList.add('active');
+        } else {
+          otherInput.classList.remove('active');
+          document.getElementById('val-col5-other').value = '';
+        }
+      }
+    }
+
+    // Navigation & Wizard control
+    const stepIds = [
+      'step-name',
+      'step-col2',
+      'step-address',
+      'step-tel',
+      'step-col5',
+      'step-koden',
+      'step-offering',
+      'step-other',
+      'step-summary'
+    ];
+
+    function showStep(step) {
+      stopRecognition();
+      
+      // Toggle active classes
+      stepIds.forEach((id, idx) => {
+        const el = document.getElementById(id);
+        if (idx === step - 1) {
+          el.classList.add('active');
+        } else {
+          el.classList.remove('active');
+        }
+      });
+
+      // Update progress bar & counter
+      if (step <= totalSteps) {
+        document.getElementById('progress-container').classList.remove('hidden');
+        const percentage = (step / totalSteps) * 100;
+        document.getElementById('progress-bar').style.width = percentage + '%';
+        document.getElementById('step-counter').innerText = `ステップ ${step} / ${totalSteps}`;
+      } else {
+        // Summary step - hide progress bar
+        document.getElementById('progress-container').classList.add('hidden');
+      }
+
+      currentStep = step;
+      window.scrollTo(0, 0);
+    }
+
+    function nextStep() {
+      if (currentStep < totalSteps) {
+        showStep(currentStep + 1);
+      } else if (currentStep === totalSteps) {
+        showSummary();
+      }
+    }
+
+    function prevStep() {
+      if (currentStep > 1) {
+        showStep(currentStep - 1);
+      }
+    }
+
+    function jumpToStep(step) {
+      showStep(step);
+    }
+
+    // Compile inputs and display on summary screen
+    function showSummary() {
+      // Get all values
+      const name = document.getElementById('val-name').value.trim();
+      
+      // Compile Col 2 Checkboxes (通夜, 告別式)
+      let col2List = [];
+      if (document.getElementById('cb-tsuya-indicator').parentElement.classList.contains('checked')) col2List.push('通夜');
+      if (document.getElementById('cb-kokubetsu-indicator').parentElement.classList.contains('checked')) col2List.push('告別式');
+      const col2 = col2List.join(', ');
+
+      const address = document.getElementById('val-address').value.trim();
+      const tel = document.getElementById('val-tel').value.trim();
+
+      // Compile Col 5 Checkboxes (一般, 会社, 親戚, その他)
+      let col5List = [];
+      if (document.getElementById('cb-ippan-indicator').parentElement.classList.contains('checked')) col5List.push('一般');
+      if (document.getElementById('cb-kaisha-indicator').parentElement.classList.contains('checked')) col5List.push('会社');
+      if (document.getElementById('cb-shinseki-indicator').parentElement.classList.contains('checked')) col5List.push('親戚');
+      if (document.getElementById('cb-other5-indicator').parentElement.classList.contains('checked')) {
+        const otherVal = document.getElementById('val-col5-other').value.trim();
+        if (otherVal) col5List.push(otherVal);
+        else col5List.push('その他');
+      }
+      const col5 = col5List.join(', ');
+
+      const koden = document.getElementById('val-koden').value.trim();
+      const offering = document.getElementById('val-offering').value.trim();
+      const other = document.getElementById('val-other').value.trim();
+
+      // Set values on summary view
+      document.getElementById('sum-name').innerText = name;
+      document.getElementById('sum-col2').innerText = col2;
+      document.getElementById('sum-address').innerText = address;
+      document.getElementById('sum-tel').innerText = tel;
+      document.getElementById('sum-col5').innerText = col5;
+      document.getElementById('sum-koden').innerText = koden;
+      document.getElementById('sum-offering').innerText = offering;
+      document.getElementById('sum-other').innerText = other;
+
+      showStep(9); // Show summary
+    }
+
+    // Submit data object to Google Apps Script backend
+    function submitToSheet() {
+      const submitBtn = document.getElementById('submit-btn');
+      submitBtn.innerText = '登録しています...';
+      submitBtn.classList.add('btn-disabled');
+
+      // Build payload matching spreadsheet headers
+      let col2List = [];
+      if (document.getElementById('cb-tsuya-indicator').parentElement.classList.contains('checked')) col2List.push('通夜');
+      if (document.getElementById('cb-kokubetsu-indicator').parentElement.classList.contains('checked')) col2List.push('告別式');
+      
+      let col5List = [];
+      if (document.getElementById('cb-ippan-indicator').parentElement.classList.contains('checked')) col5List.push('一般');
+      if (document.getElementById('cb-kaisha-indicator').parentElement.classList.contains('checked')) col5List.push('会社');
+      if (document.getElementById('cb-shinseki-indicator').parentElement.classList.contains('checked')) col5List.push('親戚');
+      if (document.getElementById('cb-other5-indicator').parentElement.classList.contains('checked')) {
+        const otherVal = document.getElementById('val-col5-other').value.trim();
+        if (otherVal) col5List.push(otherVal);
+        else col5List.push('その他');
+      }
+
+      const payload = {
+        name: document.getElementById('val-name').value.trim(),
+        col2: col2List.join(', '),
+        address: document.getElementById('val-address').value.trim(),
+        tel: document.getElementById('val-tel').value.trim(),
+        col5: col5List.join(', '),
+        koden: document.getElementById('val-koden').value.trim(),
+        offering: document.getElementById('val-offering').value.trim(),
+        other: document.getElementById('val-other').value.trim()
+      };
+
+      // Check if we are running in Google Apps Script Environment
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(onSuccess)
+          .withFailureHandler(onFailure)
+          .addRecord(payload);
+      } else {
+        // Fallback for local testing/development
+        console.log("GAS environment not detected. Payload would be:", payload);
+        setTimeout(() => {
+          onSuccess({ status: "success", message: "（ローカルテスト）登録に成功しました。" });
+        }, 1500);
+      }
+    }
+
+    // Success response handler
+    function onSuccess(response) {
+      const toast = document.getElementById('toast');
+      const submitBtn = document.getElementById('submit-btn');
+
+      submitBtn.innerText = '登録する';
+      submitBtn.classList.remove('btn-disabled');
+
+      if (response.status === 'success') {
+        playBeep('success');
+        
+        toast.innerText = response.message;
+        toast.className = 'toast-overlay toast-success';
+        
+        // Clear all inputs
+        clearAllInputs();
+
+        // Redirect back to step 1 after 2.5 seconds
+        setTimeout(() => {
+          toast.className = 'toast-overlay';
+          showStep(1);
+        }, 2500);
+      } else {
+        toast.innerText = response.message;
+        toast.className = 'toast-overlay toast-error';
+        setTimeout(() => { toast.className = 'toast-overlay'; }, 4000);
+      }
+    }
+
+    // Error response handler
+    function onFailure(error) {
+      const toast = document.getElementById('toast');
+      const submitBtn = document.getElementById('submit-btn');
+
+      submitBtn.innerText = '登録する';
+      submitBtn.classList.remove('btn-disabled');
+
+      toast.innerText = '通信エラーが発生しました: ' + error.toString();
+      toast.className = 'toast-overlay toast-error';
+      setTimeout(() => { toast.className = 'toast-overlay'; }, 4000);
+    }
+
+    // Reset form inputs for next registration
+    function clearAllInputs() {
+      document.getElementById('val-name').value = '';
+      document.getElementById('val-address').value = '';
+      document.getElementById('val-tel').value = '';
+      document.getElementById('val-koden').value = '';
+      document.getElementById('val-offering').value = '';
+      document.getElementById('val-other').value = '';
+      document.getElementById('val-col5-other').value = '';
+
+      // Uncheck checkboxes
+      document.querySelectorAll('.checkbox-block').forEach(block => {
+        block.classList.remove('checked');
+      });
+      document.getElementById('other5-text-container').classList.remove('active');
+
+      // Reset selected button styles
+      document.querySelectorAll('.quick-btn').forEach(btn => {
+        btn.classList.remove('selected');
+      });
+    }
+
+    // Add back button event listeners
+    document.querySelectorAll('.btn-back').forEach(btn => {
+      // Handle custom onclicks instead if defined, otherwise go back
+      if (!btn.getAttribute('onclick')) {
+        btn.addEventListener('click', prevStep);
+      }
+    });
+
+    // Check browser compatibility on load
+    window.addEventListener('DOMContentLoaded', () => {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        document.getElementById('compatibility-warning').classList.remove('hidden');
+      }
+    });
+  </script>
+</body>
+</html>
